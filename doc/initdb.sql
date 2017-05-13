@@ -1,0 +1,12 @@
+set names utf8;
+DROP DATABASE IF EXISTS `config`;
+CREATE DATABASE config;
+use config
+
+CREATE TABLE config.ApiAuthKey
+(
+    ID INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+    AppKey VARCHAR(32) NOT NULL,
+    AppSecret VARCHAR(32) NOT NULL,
+    Headers TEXT NOT NULL
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;
