@@ -23,7 +23,7 @@ func (key AuthKey) CheckSignature(sign, method, date, resource string) (bool, er
 		return false, err
 	}
 	timeShift := time.Now().Unix() - requestTime.Unix()
-	if timeShift > 600 || timeShift < 600 {
+	if timeShift > 600 || timeShift < -600 {
 		return false, nil
 	}
 
