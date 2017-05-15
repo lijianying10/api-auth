@@ -17,4 +17,5 @@ func main() {
 	go func() {
 		rps.ListenAndServe(":7777")
 	}()
+	select {}
 }

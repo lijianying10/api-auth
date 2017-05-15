@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/julienschmidt/httprouter"
 	"github.com/lijianying10/api-auth/AuthKey"
@@ -52,12 +53,12 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 	}
 
 	AppKey := randStringRunes(32)
-	AppSecret := randStringRunes(32)
+	SecretKey := randStringRunes(32)
 
-	_, err = akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`AppSecret`,`Headers`) VALUES (:AppKey, :AppSecret, :headers)",
+	_, err = akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`SecretKey`,`Headers`) VALUES (:AppKey, :SecretKey, :headers)",
 		map[string]interface{}{
 			"AppKey":    AppKey,
-			"AppSecret": AppSecret,
+			"SecretKey": SecretKey,
 			"headers":   string(jsonHeader),
 		})
 	if err != nil {
@@ -72,7 +73,7 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 		"message": "",
 		"data": map[string]string{
 			"AppKey":    AppKey,
-			"AppSecret": AppSecret,
+			"SecretKey": SecretKey,
 		},
 	})
 	w.Write(resData)
@@ -95,27 +96,27 @@ func (akms *AppKeyManageServer) HandlerRefreashAppKeys(w http.ResponseWriter, r 
 func (akms *AppKeyManageServer) Refreash() error {
 	type ApiAuthMapping struct {
 		AppKey    string `db:"AppKey"`
-		AppSecret string `db:"AppSecret"`
-		headers   string `db:"headers"`
+		SecretKey string `db:"SecretKey"`
+		Headers   string `db:"Headers"`
 	}
 	keys := []ApiAuthMapping{}
-	err := akms.db.Get(&keys, "select AppKey,AppSecret,Headers from ApiAuthKey")
+	err := akms.db.Get(&keys, "select AppKey,SecretKey,Headers from ApiAuthKey")
 	if err != nil {
 		log.Error("error Refreash data", err.Error())
 		return err
 	}
 	akms.keys = make(map[string]AuthKey.AuthKey)
 	for _, key := range keys {
-		headers := make(map[string]string)
-		err := json.Unmarshal([]byte(key.headers), &headers)
+		Headers := make(map[string]string)
+		err := json.Unmarshal([]byte(key.Headers), &Headers)
 		if err != nil {
 			log.Error("header format error, "+key.AppKey+" :", err.Error())
 			continue
 		}
 		akms.keys[key.AppKey] = AuthKey.AuthKey{
 			AppKey:    key.AppKey,
-			SecretKey: key.AppSecret,
-			Headers:   headers,
+			SecretKey: key.SecretKey,
+			Headers:   Headers,
 		}
 	}
 
