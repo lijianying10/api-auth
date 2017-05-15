@@ -20,7 +20,7 @@ type AppKeyManageServer struct {
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
 
-func New(dbConn string) AppKeyManageServer {
+func New(dbConn string) *AppKeyManageServer {
 	rand.Seed(time.Now().UnixNano())
 	return &AppKeyManageServer{
 		connStr: dbConn,
@@ -28,11 +28,12 @@ func New(dbConn string) AppKeyManageServer {
 	}
 }
 
-func (akms *AppKeyManageServer) ListenAndServe() {
+func (akms *AppKeyManageServer) ListenAndServe(serve string) {
 	router := httprouter.New()
 	router.POST("/auth/key", akms.HandlerNewAppKey)
 	router.GET("/auth/key", akms.HandlerGetAppKeys)
-	router.Option("/auth/key", akms.HandlerRefreashAppKeys)
+	router.OPTIONS("/auth/key", akms.HandlerRefreashAppKeys)
+	log.Fatal(http.ListenAndServe(serve, router))
 }
 
 func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -50,14 +51,14 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 		return
 	}
 
-	Appkey := randStringRunes(32)
+	AppKey := randStringRunes(32)
 	AppSecret := randStringRunes(32)
 
-	_, err := akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`AppSecret`,`Headers`) VALUES (:AppKey, :AppSecret, :headers)",
+	_, err = akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`AppSecret`,`Headers`) VALUES (:AppKey, :AppSecret, :headers)",
 		map[string]interface{}{
-			"AppKey":    Appkey,
+			"AppKey":    AppKey,
 			"AppSecret": AppSecret,
-			"headers":   string(headers),
+			"headers":   string(jsonHeader),
 		})
 	if err != nil {
 		log.Error("error database storage : ", err.Error())
@@ -82,7 +83,11 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 func (akms *AppKeyManageServer) HandlerGetAppKeys(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 }
 func (akms *AppKeyManageServer) HandlerRefreashAppKeys(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	akms.Refreash()
+	err := akms.Refreash()
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
 	w.WriteHeader(200)
 	return
 }
@@ -97,21 +102,20 @@ func (akms *AppKeyManageServer) Refreash() error {
 	err := akms.db.Get(&keys, "select AppKey,AppSecret,Headers from ApiAuthKey")
 	if err != nil {
 		log.Error("error Refreash data", err.Error())
-		w.WriteHeader(500)
 		return err
 	}
 	akms.keys = make(map[string]AuthKey.AuthKey)
 	for _, key := range keys {
 		headers := make(map[string]string)
-		err := json.Unmarshal(key.headers, &headers)
+		err := json.Unmarshal([]byte(key.headers), &headers)
 		if err != nil {
 			log.Error("header format error, "+key.AppKey+" :", err.Error())
 			continue
 		}
 		akms.keys[key.AppKey] = AuthKey.AuthKey{
-			Appkey:    key.AppKey,
-			AppSecret: key.AppSecret,
-			headers:   headers,
+			AppKey:    key.AppKey,
+			SecretKey: key.AppSecret,
+			Headers:   headers,
 		}
 	}
 
@@ -119,7 +123,7 @@ func (akms *AppKeyManageServer) Refreash() error {
 }
 
 func (akms *AppKeyManageServer) Get(AppKey string) AuthKey.AuthKey {
-	return akms.keys[Appkey]
+	return akms.keys[AppKey]
 }
 
 func randStringRunes(n int) string {
