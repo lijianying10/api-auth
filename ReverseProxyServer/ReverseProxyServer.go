@@ -1,13 +1,12 @@
 package ReverseProxyServer
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 
 	"github.com/lijianying10/api-auth/AppKeyManageServer"
+	"github.com/lijianying10/log"
 )
 
 type ReverseProxyServer struct {
@@ -20,12 +19,12 @@ func New(akms *AppKeyManageServer.AppKeyManageServer) *ReverseProxyServer {
 	}
 }
 
-func (rps *ReverseProxyServer) ListenAndServe(serve string) {
+func (rps *ReverseProxyServer) ListenAndServe(serve string, backendServer string) {
 	http.Handle("/", rps.logger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		director := func(req *http.Request) {
 			req = r
 			req.URL.Scheme = "http"
-			req.URL.Host = "127.0.0.1:7778"
+			req.URL.Host = backendServer
 		}
 		proxy := &httputil.ReverseProxy{Director: director}
 		proxy.ServeHTTP(w, r)
@@ -47,11 +46,28 @@ func (rps *ReverseProxyServer) logger(h http.Handler) http.Handler {
 		}
 
 		// Checking keys
-		sss, err := json.Marshal(r.Header["Authorization"])
-		if err != nil {
-			fmt.Println(err.Error())
+		keysSequence := strings.Split(r.Header["Authorization"][0], ":")
+		exist, authKey := rps.appKeyManageServer.Get(keysSequence[0])
+		if !exist {
+			w.WriteHeader(403)
+			w.Write([]byte("Bad AppKey"))
+			return
 		}
-		fmt.Println(string(sss))
+
+		valid, err := authKey.CheckSignature(keysSequence[1], r.Method, r.Header["Date"][0], strings.Split(r.RequestURI, "?")[0])
+		if err != nil {
+			log.Error("Check Signature error: ", err.Error())
+			w.WriteHeader(500)
+			w.Write([]byte("Auth Server ERROR"))
+			return
+		}
+
+		if !valid {
+			w.WriteHeader(403)
+			w.Write([]byte("Bad Signature"))
+			return
+		}
+
 		h.ServeHTTP(w, r)
 	})
 }

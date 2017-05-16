@@ -53,12 +53,12 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 	}
 
 	AppKey := randStringRunes(32)
-	SecretKey := randStringRunes(32)
+	AppSecret := randStringRunes(32)
 
-	_, err = akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`SecretKey`,`Headers`) VALUES (:AppKey, :SecretKey, :headers)",
+	_, err = akms.db.NamedExec("INSERT INTO `ApiAuthKey`(`AppKey`,`AppSecret`,`Headers`) VALUES (:AppKey, :AppSecret, :headers)",
 		map[string]interface{}{
 			"AppKey":    AppKey,
-			"SecretKey": SecretKey,
+			"AppSecret": AppSecret,
 			"headers":   string(jsonHeader),
 		})
 	if err != nil {
@@ -73,7 +73,7 @@ func (akms *AppKeyManageServer) HandlerNewAppKey(w http.ResponseWriter, r *http.
 		"message": "",
 		"data": map[string]string{
 			"AppKey":    AppKey,
-			"SecretKey": SecretKey,
+			"AppSecret": AppSecret,
 		},
 	})
 	w.Write(resData)
@@ -96,13 +96,13 @@ func (akms *AppKeyManageServer) HandlerRefreashAppKeys(w http.ResponseWriter, r 
 func (akms *AppKeyManageServer) Refreash() error {
 	type ApiAuthMapping struct {
 		AppKey    string `db:"AppKey"`
-		SecretKey string `db:"SecretKey"`
+		AppSecret string `db:"AppSecret"`
 		Headers   string `db:"Headers"`
 	}
 	keys := []ApiAuthMapping{}
-	err := akms.db.Get(&keys, "select AppKey,SecretKey,Headers from ApiAuthKey")
+	err := akms.db.Select(&keys, "select AppKey,AppSecret,Headers from ApiAuthKey")
 	if err != nil {
-		log.Error("error Refreash data", err.Error())
+		log.Error("error Refreash data:", err.Error())
 		return err
 	}
 	akms.keys = make(map[string]AuthKey.AuthKey)
@@ -115,7 +115,7 @@ func (akms *AppKeyManageServer) Refreash() error {
 		}
 		akms.keys[key.AppKey] = AuthKey.AuthKey{
 			AppKey:    key.AppKey,
-			SecretKey: key.SecretKey,
+			AppSecret: key.AppSecret,
 			Headers:   Headers,
 		}
 	}
@@ -123,8 +123,12 @@ func (akms *AppKeyManageServer) Refreash() error {
 	return nil
 }
 
-func (akms *AppKeyManageServer) Get(AppKey string) AuthKey.AuthKey {
-	return akms.keys[AppKey]
+func (akms *AppKeyManageServer) Get(AppKey string) (bool, AuthKey.AuthKey) {
+	if val, ok := akms.keys[AppKey]; ok {
+		return true, val
+	} else {
+		return false, AuthKey.AuthKey{}
+	}
 }
 
 func randStringRunes(n int) string {

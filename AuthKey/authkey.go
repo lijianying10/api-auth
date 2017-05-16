@@ -9,11 +9,11 @@ import (
 
 type AuthKey struct {
 	AppKey    string
-	SecretKey string
+	AppSecret string
 	Headers   map[string]string
 }
 
-const rfc2822 = "Mon Jan 02 15:04:05 -0700 2006"
+const rfc2822 = "Mon, 02 Jan 2006 15:04:05 -0700"
 
 // CheckSignature check sha1 hmac sum , Data format : Fri, 12 May 2017 08:10:09 +0000 , use `date -u -R` get time now in this format on linux
 func (key AuthKey) CheckSignature(sign, method, date, resource string) (bool, error) {
@@ -28,7 +28,7 @@ func (key AuthKey) CheckSignature(sign, method, date, resource string) (bool, er
 	}
 
 	// check sign
-	mac := hmac.New(sha1.New, []byte(key.SecretKey))
+	mac := hmac.New(sha1.New, []byte(key.AppSecret))
 	_, err = mac.Write([]byte(method + "\n\n\n" + date + "\n" + resource))
 	if err != nil {
 		return false, err
@@ -36,6 +36,6 @@ func (key AuthKey) CheckSignature(sign, method, date, resource string) (bool, er
 	if sign == base64.StdEncoding.EncodeToString(mac.Sum(nil)) {
 		return true, nil
 	} else {
-		return true, nil
+		return false, nil
 	}
 }
